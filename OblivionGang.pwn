@@ -119,6 +119,12 @@ public OnPlayerConnect(playerid)
 	pInfo[playerid][pGangRank] = GANG_RANK_NONE;
 	format(String, sizeof(String), "SELECT gangid, gangrank FROM users WHERE name = '%s'", _GetName(playerid));
     mysql_tquery(ObliGangcon, String, "LoadPlayerGangData", "i", playerid);
+    
+    if(pInfo[playerid][pGangID] != -1)
+    {
+	  format(String, sizeof(String), ""OGANG" %s has logged on!", _GetName(playerid));
+	  gang_announce(pInfo[playerid][pGangID], String);
+	}
 	return 1;
 }
 
@@ -138,6 +144,11 @@ public LoadPlayerGangData(playerid)
 public OnPlayerDisconnect(playerid, reason)
 {
     Iter_Remove(ObliPlayers, playerid);
+    if(pInfo[playerid][pGangID] != -1)
+    {
+	  format(String, sizeof(String), ""OGANG" %s has logged out!", _GetName(playerid));
+	  gang_announce(pInfo[playerid][pGangID], String);
+	}
 	return 1;
 }
 
