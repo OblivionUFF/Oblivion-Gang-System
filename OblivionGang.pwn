@@ -10,7 +10,7 @@
 #include <a_mysql41>
 #include <sscanf2>
 #include <zcmd>
-#include <YSI\y_iterate>
+#include <YSI\y_iterate> // Y-Less
 
 #define MAX_GANGS 100
 #define GANG_RANK_FOUNDER 4
@@ -25,6 +25,7 @@
 
 
 #define SendError(%1,%2) SendClientMessage(%1, 0xFF0000FF, "[INFO] "%2)
+#define strcpy(%0,%1,%2) strcat((%0[0] = '\0', %0), %1, %2)
 #define OGANG "{FFFF00}Oblivion Gang{FFFFFF}"
 #define RGBA(%1,%2,%3,%4) (((((%1) & 0xff) << 24) | (((%2) & 0xff) << 16) | (((%3) & 0xff) << 8) | ((%4) & 0xff)))
 
@@ -36,7 +37,7 @@
 #define GREEN 	"{3BBD44}"
 
 new MySQL:ObliGangcon;
-new Iterator:Obligang<MAX_GANGS>, Iterator:ObliPlayers<MAX_PLAYERS>, String[700], CreateGangName[MAX_PLAYERS][40], CreateGangTag[MAX_PLAYERS][5];
+new Iterator:Obligang<MAX_GANGS>, String[700], CreateGangName[MAX_PLAYERS][40], CreateGangTag[MAX_PLAYERS][5];
 
 enum pdata
 {
@@ -84,47 +85,40 @@ public OnFilterScriptInit()
 	#endif
     cache_delete(LoadGang);
     
-/*	
-CREATE TABLE IF NOT EXISTS `gang` (
-	`id` int(10) NOT NULL AUTO_INCREMENT,
-	`name` varchar(30) NOT NULL DEFAULT '-',
-	`tag` varchar(5) NOT NULL DEFAULT '-',
-	`color` int(11) NOT NULL DEFAULT '-1',
-	`founder` varchar(30) NOT NULL DEFAULT '-',
-    `score` int(10) NOT NULL DEFAULT '0',
-    PRIMARY KEY (`id`)
-    ) ENGINE=MyISAM AUTO_INCREMENT=0 DEFAULT CHARSET=latin1;*/
+	/*
+	CREATE TABLE IF NOT EXISTS `gang` (
+		`id` int(10) NOT NULL AUTO_INCREMENT,
+		`name` varchar(30) NOT NULL DEFAULT '-',
+		`tag` varchar(5) NOT NULL DEFAULT '-',
+		`color` int(11) NOT NULL DEFAULT '-1',
+		`founder` varchar(30) NOT NULL DEFAULT '-',
+	    `score` int(10) NOT NULL DEFAULT '0',
+	    PRIMARY KEY (`id`)
+	    ) ENGINE=MyISAM AUTO_INCREMENT=0 DEFAULT CHARSET=latin1;*/
 
-/*
-CREATE TABLE IF NOT EXISTS `users` (
-	`id` int(10) NOT NULL AUTO_INCREMENT,
-	`name` varchar(30) NOT NULL DEFAULT '-',
-	`gangid` int(10) NOT NULL DEFAULT '-1',
-	`gangrank` int(11) NOT NULL DEFAULT '0',
-    PRIMARY KEY (`id`)
-    ) ENGINE=MyISAM AUTO_INCREMENT=0 DEFAULT CHARSET=latin1;*/
-    
+	/*
+	CREATE TABLE IF NOT EXISTS `users` (
+		`id` int(10) NOT NULL AUTO_INCREMENT,
+		`name` varchar(30) NOT NULL DEFAULT '-',
+		`gangid` int(10) NOT NULL DEFAULT '-1',
+		`gangrank` int(11) NOT NULL DEFAULT '0',
+	    PRIMARY KEY (`id`)
+	    ) ENGINE=MyISAM AUTO_INCREMENT=0 DEFAULT CHARSET=latin1;*/
+
 	return 1;
 }
 public OnFilterScriptExit()
 {
-    Iter_Clear(ObliPlayers);
+    
 	return 1;
 }
 
 public OnPlayerConnect(playerid)
 {
-	Iter_Add(ObliPlayers, playerid);
 	pInfo[playerid][pGangID] = -1;
 	pInfo[playerid][pGangRank] = GANG_RANK_NONE;
 	format(String, sizeof(String), "SELECT gangid, gangrank FROM users WHERE name = '%s'", _GetName(playerid));
     mysql_tquery(ObliGangcon, String, "LoadPlayerGangData", "i", playerid);
-    
-    if(pInfo[playerid][pGangID] != -1)
-    {
-	  format(String, sizeof(String), ""OGANG" %s has logged on!", _GetName(playerid));
-	  gang_announce(pInfo[playerid][pGangID], String);
-	}
 	return 1;
 }
 
@@ -135,6 +129,8 @@ public LoadPlayerGangData(playerid)
    
    cache_get_value_index_int(0, 0, pInfo[playerid][pGangID]);
    cache_get_value_index_int(0, 1, pInfo[playerid][pGangRank]);
+   format(String, sizeof(String), ""OGANG" %s has logged on!", _GetName(playerid));
+   gang_announce(pInfo[playerid][pGangID], String);
    // DEBUG
    #if DebugOn == true
    printf("%s Gang ID: %d, GangRank: %i Loaded",_GetName(playerid), pInfo[playerid][pGangID],pInfo[playerid][pGangRank]);
@@ -143,7 +139,7 @@ public LoadPlayerGangData(playerid)
 }
 public OnPlayerDisconnect(playerid, reason)
 {
-    Iter_Remove(ObliPlayers, playerid);
+
     if(pInfo[playerid][pGangID] != -1)
     {
 	  format(String, sizeof(String), ""OGANG" %s has logged out!", _GetName(playerid));
@@ -159,6 +155,8 @@ CMD:gcreate(playerid, params[])
  	new gtag[5], gname[40], query[500];
  	
 	if(sscanf(params, "s[40]s[5]", gname, gtag)) return SendError(playerid, "/gcreate <Gang name> <Gang tag>");
+	if(strlen(gname) < 1 || strlen(gname) > 40) return SendError(playerid, "Gang name min - 1 and max -40");
+	if(strlen(gtag) < 1 || strlen(gtag) > 5) return SendError(playerid, "Gang name min - 1 and max - 5");
 	if(!strcmp(_GetName(playerid), gname, true)) return SendError(playerid, "You can't set your name as your gang name.");
 	//
 	format(query, sizeof(query), "SELECT * FROM gang WHERE name = '%s'", gname); //First search (Gang Name)
@@ -169,19 +167,26 @@ CMD:gcreate(playerid, params[])
 	    cache_delete(grn_result);
 	    return 1;
 	}
+	cache_delete(grn_result);
 	//
 	format(query, sizeof(query), "SELECT * FROM gang WHERE tag = '%s'", gtag); //Second search (Gang Tag)
 	new Cache:grt_result = mysql_query(ObliGangcon,query);
 	if(cache_num_rows())
 	{
 	    SendError(playerid, "This gang tag already exists in our database, search another one.");
-	    cache_delete(grt_result);
+        cache_delete(grt_result);
 	    return 1;
 	}
+	cache_delete(grt_result);
 	//If name/tag is unique
-	CreateGangName[playerid] = gname;
-	CreateGangTag[playerid] = gtag;
-	format(query, sizeof(query), "INSERT INTO `gang` (`name`, `color`, `tag`, `founder`) VALUES ('%s', '-1', '%s', '%s')", gname, gtag, _GetName(playerid));
+	strcpy(CreateGangName[playerid], gname, 40);
+	strcpy(CreateGangTag[playerid], gtag,  5);
+	
+	new escapestrh[40], escapestrg[5];
+	mysql_escape_string(gname, escapestrh);
+	mysql_escape_string(gtag, escapestrg);
+
+	format(query, sizeof(query), "INSERT INTO `gang` (`name`, `color`, `tag`, `founder`) VALUES ('%s', '-1', '%s', '%s')", escapestrh,  escapestrg, _GetName(playerid));
 	mysql_tquery(ObliGangcon, query, "OnGangCreate", "i", playerid);
 	//
     return 1;
@@ -192,8 +197,8 @@ public OnGangCreate(playerid)
 {
 	new i = cache_insert_id(), query[400];
 	//
-	format(GangInfo[i][GangName], 40, "%s", CreateGangName[playerid]);
-	format(GangInfo[i][GangTag], 5, "%s", CreateGangTag[playerid]);
+	strcpy(GangInfo[i][GangName], CreateGangName[playerid], 40);
+	strcpy(GangInfo[i][GangTag], CreateGangTag[playerid],  5);
 	GangInfo[i][GangScore] += 5;
 	//
 	pInfo[playerid][pGangID] = i;
@@ -204,6 +209,7 @@ public OnGangCreate(playerid)
 	format(String, sizeof(String), ""OGANG" %s(%d) has registered his gang [%s]%s", _GetName(playerid), playerid , CreateGangTag[playerid],CreateGangName[playerid]);
 	SendClientMessageToAll(-1, String);
 	GameTextForPlayer(playerid, "~g~~h~Gang Created!", 4000, 3);
+	
 	format(query, sizeof(query), "INSERT INTO `users` (`name`, `gangid`, `gangrank`)  VALUES ('%s','%d','%d')",
 	_GetName(playerid), pInfo[playerid][pGangID], pInfo[playerid][pGangRank]);
     mysql_query(ObliGangcon,query);
@@ -224,6 +230,8 @@ CMD:grename(playerid, params[])
 	if(GetPlayerMoney(playerid) < 1000) return SendError(playerid, "You must have 1000 to create a gang!");
 	new gtag[5], gname[40], query[300];
 	if(sscanf(params, "s[40]s[5]", gname, gtag)) return SendError(playerid, "/grename <Gang name> <Gang tag>");
+	if(strlen(gname) < 1 || strlen(gname) > 40) return SendError(playerid, "Gang name min - 1 and max -40");
+	if(strlen(gtag) < 1 || strlen(gtag) > 5) return SendError(playerid, "Gang name min - 1 and max - 5");
 	if(!strcmp(_GetName(playerid), gname, true)) return SendError(playerid, "You can't set your name as your gang name.");
 
 	//
@@ -235,7 +243,7 @@ CMD:grename(playerid, params[])
 	    cache_delete(grn_result);
 	    return 1;
 	}
-	
+	cache_delete(grn_result);
 	//
 	format(query, sizeof(query), "SELECT id FROM gang WHERE tag = '%s'", gtag); //Second search (Gang Tag)
 	new Cache:grt_result = mysql_query(ObliGangcon, query);
@@ -245,13 +253,16 @@ CMD:grename(playerid, params[])
 	    cache_delete(grt_result);
 	    return 1;
 	}
-
+    cache_delete(grt_result);
 	//If name/tag is unique
-	format(query, sizeof(query), "UPDATE gang SET name = '%s', tag = '%s' WHERE id = %d", gname, gtag, pInfo[playerid][pGangID]);
+	new escapestrh[40], escapestrg[5];
+	mysql_escape_string(gname, escapestrh);
+	mysql_escape_string(gtag, escapestrg);
+	format(query, sizeof(query), "UPDATE gang SET name = '%s', tag = '%s' WHERE id = %d", escapestrh, escapestrg, pInfo[playerid][pGangID]);
 	mysql_query(ObliGangcon, query);
 	//
-	format(GangInfo[pInfo[playerid][pGangID]][GangName], 40, "%s", gname);
-	format(GangInfo[pInfo[playerid][pGangID]][GangTag], 5, "%s", gtag);
+	strcpy(GangInfo[pInfo[playerid][pGangID]][GangName], gname, 40);
+	strcpy(GangInfo[pInfo[playerid][pGangID]][GangTag], gtag,  5);
 	//
 
 	format(String, sizeof(String), ""OGANG" Gang Founder %s(%i) has changed the gang name to '[%s] %s'!", _GetName(playerid), playerid, gtag,gname);
@@ -282,10 +293,9 @@ public ShowTop10(playerid)
 	{
 		new count = 0;
         new  memberstring[2400], cmString[2400];
+        new ggname[MAX_PLAYER_NAME], color,  gscore;
 		for(new i = 0; i < rows; i++)
 		{
-			new ggname[MAX_PLAYER_NAME], color,  gscore;
-			
 	        cache_get_value_name(i, "name",ggname);
 	        cache_get_value_name_int(i, "color", color);
 	        cache_get_value_name_int(i, "score", gscore);
@@ -372,15 +382,24 @@ CMD:ganginvite(playerid, params[])
 	{
 	    return SendError(playerid, "You must be near the player to whom you are inviting!");
 	}
-	format(query, sizeof(query), "SELECT gangid FROM users WHERE gangid=%d", pInfo[playerid][pGangID]);
-	new Cache:ggm = mysql_query(ObliGangcon, query);
-    if(cache_num_rows()  > MAX_GANG_MEMBERS)
+    //
+	format(query, sizeof(query), "SELECT COUNT(*) FROM users WHERE gangid=%d", pInfo[playerid][pGangID]);
+	new Cache:ggm = mysql_query(ObliGangcon, query), rowcount;
+    if(cache_num_rows())
     {
-        SendError(playerid, "You can't have more than "#MAX_GANG_MEMBERS" members in your gang!");
-        cache_delete(ggm);
-        return 1;
+        cache_get_value_index_int(0, 0, rowcount);
+        #if DebugOn == true
+        printf("Number of Gang members: %i in gang id : %i", rowcount, pInfo[playerid][pGangID]);
+        #endif
+        if( rowcount < MAX_GANG_MEMBERS)
+        {
+	        SendError(playerid, "You can't have more than "#MAX_GANG_MEMBERS" members in your gang!");
+	        cache_delete(ggm);
+	        return 1;
+		}
     }
-    
+    cache_delete(ggm);
+    //
 	format(String, sizeof(String), ""OGANG" %s(%i) has invited you to his gang '%s'. Type /gjoin or /gdeny to respond.", _GetName(playerid), playerid, GangInfo[pInfo[playerid][pGangID]][GangName]);
 	SendClientMessage(otherid, -1, String);
 
@@ -408,7 +427,9 @@ CMD:gkick(playerid, params[])
 	    SendError(playerid, "/gkick <name>");
 	    return true;
 	}
-	format(query, sizeof(query), "SELECT gangid FROM users WHERE name = '%s'", nametmp);
+	new escapestr[24];
+	mysql_escape_string(nametmp, escapestr);
+	format(query, sizeof(query), "SELECT gangid FROM users WHERE name = '%s'", escapestr);
 	mysql_tquery(ObliGangcon, query, "KickMember", "is", playerid, nametmp);
     return 1;
 }
@@ -430,19 +451,16 @@ public KickMember(playerid, kname[])
 
 	format(line, sizeof(line), ""OGANG" %s(%i) has kicked out %s from the gang.", _GetName(playerid), playerid, kname);
 	gang_announce(pInfo[playerid][pGangID], line);
+	
+
 	format(query, sizeof(query), "UPDATE users SET gangid=-1,gangrank=0 WHERE name = '%s'", kname);
 	mysql_query(ObliGangcon,query);
-
-	//==== Setting Player ingame
-	foreach(new i : ObliPlayers)
+	
+	new kplayerid;
+	if (!sscanf(kname, "r", kplayerid) && kplayerid != INVALID_PLAYER_ID)
 	{
-	      new checkname[MAX_PLAYER_NAME];
-	      GetPlayerName(i, checkname, sizeof(checkname));
-	      if(strcmp(checkname, kname, true, strlen(kname)) == 0)
-	      {
-	        	   pInfo[i][pGangRank] = GANG_RANK_NONE;
-	               pInfo[i][pGangID] = -1;
-	      }
+	     pInfo[kplayerid][pGangRank] = GANG_RANK_NONE;
+	     pInfo[kplayerid][pGangID] = -1;
 	}
 	return 1;
 }
@@ -613,7 +631,7 @@ CMD:gclose(playerid)
 	SendClientMessage(playerid, -1, ""OGANG"You have closed the gang!");
 	gang_announce(pInfo[playerid][pGangID], "The gang has been closed by it's founder");
 
-	foreach(new i : ObliPlayers)
+	foreach(new i : Player)
 	{
 		if(pInfo[i][pGangID] == pInfo[playerid][pGangID])
 		{
@@ -701,7 +719,7 @@ CMD:gcmds(playerid)
 
 gang_announce(id, gmsg[])
 {
-	foreach(new p : ObliPlayers)
+	foreach(new p : Player)
 	{
 		if(pInfo[p][pGangID] == id)
 			SendClientMessage(p, -1, gmsg);
