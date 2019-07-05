@@ -117,6 +117,7 @@ public OnPlayerConnect(playerid)
 {
 	pInfo[playerid][pGangID] = -1;
 	pInfo[playerid][pGangRank] = GANG_RANK_NONE;
+	SetPVarInt(playerid, "ganginvplayer", -1);
 	format(String, sizeof(String), "SELECT gangid, gangrank FROM users WHERE name = '%s'", _GetName(playerid));
     mysql_tquery(ObliGangcon, String, "LoadPlayerGangData", "i", playerid);
 	return 1;
@@ -391,12 +392,12 @@ CMD:ganginvite(playerid, params[])
         #if DebugOn == true
         printf("Number of Gang members: %i in gang id : %i", rowcount, pInfo[playerid][pGangID]);
         #endif
-        if( rowcount < MAX_GANG_MEMBERS)
+        if( rowcount > MAX_GANG_MEMBERS)
         {
 	        SendError(playerid, "You can't have more than "#MAX_GANG_MEMBERS" members in your gang!");
 	        cache_delete(ggm);
 	        return 1;
-		}
+	}
     }
     cache_delete(ggm);
     //
